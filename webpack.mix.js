@@ -4,6 +4,7 @@ let postcss = require('postcss-import');
 let tailwindcss = require('tailwindcss');
 
 mix
+  .disableNotifications()
   .setPublicPath('dist')
   .js('resources/js/entry.js', 'js')
   .vue({ version: 3 })

@@ -11,6 +11,7 @@ use Illuminate\Routing\Controller;
 use Laravel\Nova\Fields\FieldCollection;
 use Laravel\Nova\Http\Requests\NovaRequest;
 use Outl1ne\PageManager\Nova\Fields\PageManagerField;
+use Illuminate\Http\Resources\MergeValue;
 use Illuminate\Http\Resources\MissingValue;
 use Illuminate\Support\Facades\Storage;
 
@@ -19,14 +20,24 @@ class PageManagerController extends Controller
     use ResolvesFields;
 
     /**
-     * Filter the given data, removing any missing values.
+     * Filter the given data, flattening any merge values (Panel, Row, ...)
+     * into their child fields and removing any missing values.
+     *
+     * Mirrors Laravel's ConditionallyLoadsAttributes::filter(), which Nova
+     * relies on to expand FieldMergeValue instances. Reimplemented here
+     * instead of using the trait to avoid the trait conflict that the
+     * Laravel 12 compatibility fix ran into.
      *
      * @param  array  $data
      * @return array
      */
     protected function filter($data)
     {
-        return collect($data)->filter(fn ($value) => ! $value instanceof MissingValue)->all();
+        return collect($data)
+            ->flatMap(fn ($value) => $value instanceof MergeValue ? $this->filter($value->data) : [$value])
+            ->reject(fn ($value) => $value instanceof MissingValue)
+            ->values()
+            ->all();
     }
 
     public function getFields(Request $request, $type, $resourceId, $isSyncRequest = false)
@@ -89,6 +100,14 @@ class PageManagerController extends Controller
             $fieldCollection->resolve($dataObject);
             if ($request->get('view') == 'detail') {
                 $fieldCollection->resolveForDisplay($dataObject);
+            } else {
+                // Compute the initial dependsOn state from the resolved values so that
+                // fields conditionally shown via dependsOn (e.g. Modular vs HTML based on
+                // a Type field) render correctly on first load. This mirrors Nova's
+                // UpdateViewResource/CreateViewResource, which call the same method after
+                // resolving. Without it, dependent fields stay in their default state
+                // until the Type field is toggled and an update-fields sync request fires.
+                $fieldCollection->applyDependsOnWithDefaultValues(app()->make(NovaRequest::class));
             }
 
             $fieldCollection->assignDefaultPanel(__('novaPageManager.defaultPanelName'));
