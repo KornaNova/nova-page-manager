@@ -9,6 +9,7 @@ use Laravel\Nova\Fields\FieldCollection;
 use Laravel\Nova\Http\Requests\NovaRequest;
 use Symfony\Component\HttpFoundation\HeaderBag;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Illuminate\Http\Resources\MergeValue;
 use Illuminate\Http\Resources\MissingValue;
 
 class PageManagerField extends Field
@@ -41,14 +42,26 @@ class PageManagerField extends Field
     }
 
     /**
-     * Filter the given data, removing any missing values.
+     * Filter the given data, flattening any merge values (Panel, Row, ...)
+     * into their child fields and removing any missing values.
+     *
+     * Mirrors Laravel's ConditionallyLoadsAttributes::filter(), which Nova
+     * relies on to expand FieldMergeValue instances. Reimplemented here
+     * instead of using the trait to avoid the trait conflict that the
+     * Laravel 12 compatibility fix ran into. Without flattening, a Panel
+     * survives into the FieldCollection and `$fields->map->fill()` blows up
+     * with "Method Laravel\Nova\Panel::fill does not exist".
      *
      * @param  array  $data
      * @return array
      */
     protected function filter($data)
     {
-        return collect($data)->filter(fn ($value) => ! $value instanceof MissingValue)->all();
+        return collect($data)
+            ->flatMap(fn ($value) => $value instanceof MergeValue ? $this->filter($value->data) : [$value])
+            ->reject(fn ($value) => $value instanceof MissingValue)
+            ->values()
+            ->all();
     }
 
     public function fill(NovaRequest $request, $model)
