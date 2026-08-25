@@ -109,7 +109,7 @@ export default {
     },
 
     eventName() {
-      const from = this.field.from.replace('*', this.translatableLocale);
+      const from = this.field.slugFrom.replace('*', this.translatableLocale);
       return `${from}-change`;
     },
 

@@ -51,6 +51,7 @@ class PrefixSlugField extends Slug
         $model->{$attribute} = $newSlugs;
     }
 
+    #[\Override]
     public function jsonSerialize(): array
     {
         $novaRequest = app(NovaRequest::class);
@@ -62,10 +63,10 @@ class PrefixSlugField extends Slug
             $showCustomizeButton = true;
         }
 
-        return array_merge([
+        return array_merge(parent::jsonSerialize(), [
             'updating' => $novaRequest->isUpdateOrUpdateAttachedRequest(),
             'separator' => '-',
             'showCustomizeButton' => $showCustomizeButton,
-        ], parent::jsonSerialize());
+        ]);
     }
 }
